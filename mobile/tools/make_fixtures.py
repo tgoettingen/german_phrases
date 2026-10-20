@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from answers import check  # noqa: E402
+from display_options import (AUTOPLAY_CONTENT, DIRECTIONS, autoplay_steps, card_sides,  # noqa: E402
+                             clean_langs)
 from learning_log import classify, last_n_days, streaks, summarize  # noqa: E402
 from phrase_filters import FILTERS, SORTS, select  # noqa: E402
 from phrase_loader import load_all  # noqa: E402
@@ -60,6 +62,20 @@ def check_cases(rng: random.Random, phrases) -> list:
         ):
             cases.append([typed, expected, *check(typed, expected)])
     return cases
+
+
+LANG_CHOICES = [["de"], ["en"], ["zh"], ["de", "en"], ["zh", "de"], ["de", "en", "zh"], [], ["fr"], None]
+
+
+def display_cases(rng: random.Random, phrases) -> dict:
+    sample = [p for p in phrases if not p.examples][:2] + rng.sample(phrases, 6)
+    return {
+        "card_sides": [[d, list(card_sides(d))] for d in [*DIRECTIONS, "en_zh", None]],
+        "clean_langs": [[langs, clean_langs(langs)] for langs in LANG_CHOICES],
+        "autoplay_steps": [[p.id, content, langs, autoplay_steps(p, content, langs)]
+                           for p in sample for content in [*AUTOPLAY_CONTENT, "bogus"]
+                           for langs in LANG_CHOICES],
+    }
 
 
 def session_days(rng: random.Random, phrases, path: Path) -> tuple[list, Progress]:
@@ -124,6 +140,7 @@ def main() -> None:
         "format_interval": [[d, format_interval(d)] for d in [*range(0, 40), 45, 59, 60, 61, 89, 90,
                                                               100, 300, 364, 365, 400, 547, 548, 1000, 3650]],
         "check": check_cases(rng, phrases),
+        "display": display_cases(random.Random(99), phrases),  # own seed: the other cases stay as they were
         "days": days,
         "progress": saved,
         "starred": sorted(progress.starred),

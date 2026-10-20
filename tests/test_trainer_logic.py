@@ -7,6 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from answers import check, normalize
+from display_options import (DIRECTIONS, autoplay_steps, card_sides, clean_content, clean_direction,
+                             clean_langs, phrase_text)
 from learning_log import (GOOD_DAY, HARD_DAY, MISSED, NO_DATA, STUDIED, classify, last_n_days,
                           streaks, summarize)
 from phrase_filters import select
@@ -163,6 +165,64 @@ class SessionNavigationTest(unittest.TestCase):
         self.assertEqual(self.progress.cards, {})
 
 
+class DisplayOptionsTest(unittest.TestCase):
+    def setUp(self):
+        self.phrase = make_phrases(1)[0]
+
+    def test_six_directions_always_have_german_on_one_side(self):
+        # The original two keep their meaning: English and 中文 together.
+        self.assertEqual(card_sides("de_to_en"), (("de",), ("en", "zh")))
+        self.assertEqual(card_sides("en_to_de"), (("en", "zh"), ("de",)))
+        self.assertEqual(card_sides("de_to_en_only"), (("de",), ("en",)))
+        self.assertEqual(card_sides("en_only_to_de"), (("en",), ("de",)))
+        self.assertEqual(card_sides("de_to_zh"), (("de",), ("zh",)))
+        self.assertEqual(card_sides("zh_to_de"), (("zh",), ("de",)))
+        self.assertEqual(len(DIRECTIONS), 6)
+        for front, back in map(card_sides, DIRECTIONS):
+            self.assertTrue((front == ("de",)) != (back == ("de",)))  # German on exactly one side
+        self.assertEqual(phrase_text(self.phrase, "zh"), "词 1")
+
+    def test_invalid_values_fall_back(self):
+        self.assertEqual(clean_direction("en_zh"), "de_to_en")
+        self.assertEqual(clean_direction(None), "de_to_en")
+        self.assertEqual(clean_content("everything"), "phrase_examples")
+        self.assertEqual(clean_langs([]), ["de", "en", "zh"])
+        self.assertEqual(clean_langs(["zh", "fr", "de"]), ["de", "zh"])  # fixed order, known only
+        self.assertEqual(clean_langs("de"), ["de", "en", "zh"])
+
+    def test_progress_file_with_unknown_direction_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "progress.json"
+            path.write_text('{"settings": {"direction": "en_zh"}}', encoding="utf-8")
+            settings = Progress(path).settings
+        self.assertEqual(settings["direction"], "de_to_en")
+        self.assertEqual(settings["lists_langs"], ["de", "en", "zh"])
+
+    def spoken(self, content, langs):
+        return [(s[2], s[1]) for s in autoplay_steps(self.phrase, content, langs) if s[0] == "speak"]
+
+    def test_phrase_only_speaks_the_chosen_languages_in_order(self):
+        self.assertEqual(self.spoken("phrase", ["zh", "de"]), [("de", "wort 1"), ("zh", "词 1")])
+        self.assertEqual(self.spoken("phrase", ["en"]), [("en", "word 1")])
+        steps = autoplay_steps(self.phrase, "phrase", ["de"])
+        self.assertNotIn(("wait", "recall"), steps)  # nothing to recall with a single language
+        self.assertFalse(any(s[0] == "highlight" for s in steps))
+
+    def test_examples_follow_the_phrase(self):
+        spoken = self.spoken("phrase_examples", ["de", "en"])
+        self.assertEqual(spoken[:2], [("de", "wort 1"), ("en", "word 1")])
+        self.assertEqual(spoken[2:4], [("de", "Satz 1."), ("en", "Sentence 1.")])
+        self.assertEqual(len(spoken), 2 + 3 * 2)
+        # Without English the examples are German only
+        self.assertEqual(len(self.spoken("phrase_examples", ["de", "zh"])), 2 + 3)
+
+    def test_examples_only_skips_the_phrase(self):
+        self.assertEqual(self.spoken("examples", ["de", "zh"]), [("de", "Satz 1.")] * 3)
+        steps = autoplay_steps(self.phrase, "examples", ["de", "zh"])
+        self.assertEqual(steps[0], ("show", 2, True))
+        self.assertEqual(steps[-1], ("wait", "next"))
+
+
 class SpeakableTest(unittest.TestCase):
     def test_expands_abbreviations(self):
         self.assertEqual(speakable("sich um etw. kümmern"), "sich um etwas kümmern")
@@ -179,6 +239,14 @@ class VoiceTest(unittest.TestCase):
                          ["Microsoft Hedda", "Microsoft Stefan", "Microsoft Katja"])
         self.assertEqual(voices[1].label, "Stefan (male)")
         self.assertEqual(parse_voices("sapi\nMicrosoft Hedda Desktop|NotSet|de-DE")[0].label, "Hedda")
+
+    def test_parse_voices_keeps_english_and_chinese(self):
+        voices = parse_voices(self.LISTING + "Microsoft Zira|Female|en-US\nMicrosoft Huihui|Female|zh-CN\n"
+                              "Microsoft Ayumi|Female|ja-JP\n")
+        self.assertEqual([v.lang for v in voices], ["de", "de", "de", "en", "zh"])
+        self.assertEqual(default_voice(voices).name, "Microsoft Katja")
+        self.assertEqual(default_voice(voices, "zh").name, "Microsoft Huihui")
+        self.assertIsNone(default_voice(voices[:3], "en"))
 
     def test_default_voice_prefers_katja_and_avoids_hedda(self):
         voices = parse_voices(self.LISTING)

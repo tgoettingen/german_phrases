@@ -9,16 +9,13 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import messagebox, ttk
 
+from display_options import DIRECTIONS, card_sides, phrase_text
 from phrase_loader import collections, load_all
 from progress import Progress
 from srs import RATING_NAMES, RATINGS, format_interval
 from study import StudySession, statistics
 
 LEVEL_CHOICES = (*collections(), "ALL")
-DIRECTIONS = {
-    "de_to_en": "German → English / 中文",
-    "en_to_de": "English / 中文 → German",
-}
 EXTRA_NEW = 10
 
 # Preferred fonts per platform; the first installed one is used.
@@ -48,6 +45,7 @@ class PhraseApp:
         ui, cjk = pick_font(UI_FONTS), pick_font(CJK_FONTS)
         self.fonts = {
             "front": (ui, 26, "bold"),
+            "front_chinese": (cjk, 26, "bold"),
             "back": (ui, 18),
             "chinese": (cjk, 18),
             "small": (ui, 11),
@@ -105,13 +103,12 @@ class PhraseApp:
         self.front.pack(fill="x", pady=(24, 12))
         self.separator = ttk.Separator(card)
         self.back = ttk.Label(card, font=self.fonts["back"], justify="center", anchor="center")
-        self.chinese = ttk.Label(card, font=self.fonts["chinese"], justify="center", anchor="center")
         self.examples = tk.Text(card, wrap="word", height=8, relief="flat", borderwidth=0,
                                 font=self.fonts["example"], cursor="arrow",
                                 background=self.root.cget("background"))
         self.examples.tag_configure("de", spacing1=8)
         self.examples.tag_configure("en", foreground="gray", lmargin1=18, lmargin2=18)
-        self.wrapping = [self.front, self.back, self.chinese]
+        self.wrapping = [self.front, self.back]
         card.bind("<Configure>", self._on_resize)
 
     def _build_buttons(self) -> None:
@@ -170,7 +167,7 @@ class PhraseApp:
     def show_card(self) -> None:
         self.revealed = False
         self.root.focus_set()
-        for w in (self.separator, self.back, self.chinese, self.examples):
+        for w in (self.separator, self.back, self.examples):
             w.pack_forget()
         for w in (self.show_button, self.more_button, *self.rate_buttons.values()):
             w.pack_forget()
@@ -184,14 +181,11 @@ class PhraseApp:
             return
 
         self.topic.configure(text=f"{phrase.id} · {phrase.topic}")
-        if self.progress.settings["direction"] == "de_to_en":
-            self.front.configure(text=phrase.german)
-            self.back.configure(text=phrase.english)
-            self.chinese.configure(text=phrase.chinese)
-        else:
-            self.front.configure(text=f"{phrase.english}\n{phrase.chinese}")
-            self.back.configure(text=phrase.german)
-            self.chinese.configure(text="")
+        front, back = card_sides(self.progress.settings["direction"])
+        self.front.configure(text="\n".join(phrase_text(phrase, lang) for lang in front),
+                             font=self.fonts["front_chinese" if front == ("zh",) else "front"])
+        self.back.configure(text="\n".join(phrase_text(phrase, lang) for lang in back),
+                            font=self.fonts["chinese" if back == ("zh",) else "back"])
         self.show_button.pack(expand=True, ipadx=20, ipady=6)
 
     def reveal(self) -> None:
@@ -200,9 +194,7 @@ class PhraseApp:
             return
         self.revealed = True
         self.separator.pack(fill="x", pady=8)
-        self.back.pack(fill="x", pady=(8, 2))
-        if self.chinese.cget("text"):
-            self.chinese.pack(fill="x", pady=(0, 8))
+        self.back.pack(fill="x", pady=(8, 8))
         self.examples.configure(state="normal")
         self.examples.delete("1.0", "end")
         for german, english in phrase.examples:

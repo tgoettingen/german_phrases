@@ -35,6 +35,16 @@ test("typed answers are scored like answers.check", () => {
   }
 });
 
+test("directions and Auto play steps match display_options.py", () => {
+  const { card_sides: sides, clean_langs: langs, autoplay_steps: steps } = fx.display;
+  for (const [direction, expected] of sides) assert.deepEqual(L.cardSides(direction), expected, `${direction}`);
+  for (const [value, expected] of langs) assert.deepEqual(L.cleanLangs(value), expected, `${value}`);
+  for (const [pid, content, chosen, expected] of steps) {
+    const phrase = phrases.find((p) => p.id === pid);
+    assert.deepEqual(L.autoplaySteps(phrase, content, chosen), expected, `${pid} / ${content} / ${chosen}`);
+  }
+});
+
 // Replays 45 simulated study days and compares every queue, then the saved progress file.
 const progress = new L.Progress();
 Object.assign(progress.settings, fx.settings);

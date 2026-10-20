@@ -18,7 +18,9 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
 from answers import check
-from app import CJK_FONTS, DIRECTIONS, UI_FONTS, pick_font
+from app import CJK_FONTS, UI_FONTS, pick_font
+from display_options import (AUTOPLAY_CONTENT, DIRECTIONS, LANG_FIELD, LANG_LABELS, LANGS,
+                             autoplay_steps, card_sides, clean_content, clean_langs, phrase_text)
 from learning_log import (GOOD_DAY, HARD_DAY, MISSED, NO_DATA, STUDIED, DaySummary, classify,
                           last_n_days, streaks, summarize)
 from phrase_filters import DIFFICULT_LAPSES, FILTERS, SORTS, select, was_forgotten
@@ -37,7 +39,8 @@ CHART_DAYS = 30
 # Text size in percent of the normal size; Ctrl/Cmd + and - change it in steps.
 TEXT_SIZES = (70, 200, 10)
 BASE_FONTS = {  # name: (family kind, size, weight)
-    "front": ("ui", 26, "bold"), "back": ("ui", 18, "normal"), "chinese": ("cjk", 18, "normal"),
+    "front": ("ui", 26, "bold"), "front_chinese": ("cjk", 26, "bold"),
+    "back": ("ui", 18, "normal"), "chinese": ("cjk", 18, "normal"),
     "small": ("ui", 10, "normal"), "example": ("ui", 13, "normal"), "section": ("ui", 12, "bold"),
     "tile": ("ui", 18, "bold"), "cell": ("ui", 9, "normal"),
 }
@@ -130,6 +133,22 @@ def voice_controls(parent, app: "TrainerApp", side="left", compact=False) -> Non
     ttk.Button(box, text="▶ Test", command=app.test_voice, takefocus=False).pack(side="left")
 
 
+def lang_checkboxes(parent, lang_vars: dict, on_change) -> None:
+    """German / English / 中文 checkboxes; `on_change(lang)` gets the one just clicked."""
+    for lang in LANGS:
+        ttk.Checkbutton(parent, text=LANG_LABELS[lang], variable=lang_vars[lang], takefocus=False,
+                        command=lambda lang=lang: on_change(lang)).pack(side="left", padx=(0, 8))
+
+
+def checked_langs(lang_vars: dict, clicked: str) -> list[str] | None:
+    """The ticked languages; if none would be left, ticks `clicked` again and returns None."""
+    langs = [lang for lang in LANGS if lang_vars[lang].get()]
+    if not langs:
+        lang_vars[clicked].set(True)
+        return None
+    return langs
+
+
 def read_int(var: tk.Variable, default: int, low: int = 0) -> int:
     try:
         return max(low, int(var.get()))
@@ -147,6 +166,7 @@ class CardView(ttk.Frame):
 
     def __init__(self, parent, fonts: dict, on_speak=None):
         super().__init__(parent, padding=(24, 6))
+        self.fonts = fonts
         self.on_speak = on_speak
         self.examples_visible = False
         self.info = ttk.Label(self, font=fonts["small"], foreground=MUTED)
@@ -155,8 +175,9 @@ class CardView(ttk.Frame):
         self.front = ttk.Label(self, font=fonts["front"], justify="center", anchor="center")
         self.front.pack(fill="x", pady=(18, 8))
         self.separator = ttk.Separator(self)
-        self.back = ttk.Label(self, font=fonts["back"], justify="center", anchor="center")
-        self.chinese = ttk.Label(self, font=fonts["chinese"], justify="center", anchor="center")
+        # One line per answer language: up to two, when Browse or Auto play show all three.
+        self.answers = [ttk.Label(self, font=fonts["back"], justify="center", anchor="center")
+                        for _ in range(len(LANGS) - 1)]
         self.examples = tk.Text(self, wrap="word", height=7, relief="flat", borderwidth=0,
                                 font=fonts["example"], cursor="arrow",
                                 background=parent.winfo_toplevel().cget("background"))
@@ -169,11 +190,11 @@ class CardView(ttk.Frame):
         self.bind("<Configure>", self._on_resize)
 
     def _on_resize(self, event: tk.Event) -> None:
-        for label in (self.front, self.back, self.chinese):
+        for label in (self.front, *self.answers):
             label.configure(wraplength=max(200, event.width - 56))
 
     def _hide_all(self) -> None:
-        for w in (self.banner, self.separator, self.back, self.chinese, self.examples):
+        for w in (self.banner, self.separator, *self.answers, self.examples):
             w.pack_forget()
         self.examples_visible = False
 
@@ -184,26 +205,24 @@ class CardView(ttk.Frame):
 
     def show(self, phrase: Phrase, direction: str = "de_to_en", show_back: bool = True,
              show_examples: bool = True, example_en: bool = True, info: str = "",
-             banner: str = "") -> None:
+             banner: str = "", langs=None) -> None:
+        """`langs` (front language first, then the answers) overrides the sides of `direction`."""
         self._hide_all()
         self.info.configure(text=info)
         if banner:
             self.banner.configure(text=banner)
             self.banner.pack(anchor="w", before=self.front)
-        if direction == "de_to_en":
-            self.front.configure(text=phrase.german)
-            self.back.configure(text=phrase.english)
-            self.chinese.configure(text=phrase.chinese)
-        else:
-            self.front.configure(text=f"{phrase.english}\n{phrase.chinese}")
-            self.back.configure(text=phrase.german)
-            self.chinese.configure(text="")
+        fronts, answers = (langs[:1], langs[1:]) if langs else card_sides(direction)
+        self.front.configure(text="\n".join(phrase_text(phrase, lang) for lang in fronts),
+                             font=self.fonts["front_chinese" if list(fronts) == ["zh"] else "front"])
+        show_back = show_back and bool(answers)
         if show_back or show_examples:
             self.separator.pack(fill="x", pady=6)
         if show_back:
-            self.back.pack(fill="x", pady=(6, 2))
-            if self.chinese.cget("text"):
-                self.chinese.pack(fill="x", pady=(0, 6))
+            for label, lang in zip(self.answers, answers):
+                label.configure(text=phrase_text(phrase, lang),
+                                font=self.fonts["chinese" if lang == "zh" else "back"])
+                label.pack(fill="x", pady=(6, 2))
         if show_examples:
             self.examples.configure(state="normal")
             self.examples.delete("1.0", "end")
@@ -464,7 +483,7 @@ class StudyTab(ttk.Frame):
             if self.suggested:
                 self.rate(self.suggested)
             return
-        expected = phrase.german if self.settings["direction"] == "en_to_de" else phrase.english
+        expected = phrase_text(phrase, card_sides(self.settings["direction"])[1][0])
         score, self.suggested = check(self.answer_var.get(), expected)
         verdict = {GOOD: "✓ Correct", AGAIN: "✗ Not quite"}.get(self.suggested, "≈ Almost")
         self.answer_result.configure(text=f"{verdict} ({score:.0%})  ·  Enter = accept ▶, or 1-4")
@@ -516,9 +535,9 @@ class StudyTab(ttk.Frame):
 
     def speak(self) -> None:
         phrase = self.visible_phrase()
-        # In English → German mode, speaking before the reveal would give the answer away.
+        # When German is the answer, speaking it before the reveal would give the answer away.
         if phrase and (self.revealed or self.view_index is not None
-                       or self.settings["direction"] == "de_to_en"):
+                       or "de" in card_sides(self.settings["direction"])[0]):
             self.app.speaker.speak(phrase.german)
 
     def speak_examples(self, index: int | None = None) -> None:
@@ -666,7 +685,7 @@ class BrowseTab(ttk.Frame):
             return
         phrase = self.items[self.index]
         translations = self.translate_var.get() or self.peek
-        self.card.show(phrase, "de_to_en", show_back=translations, show_examples=True,
+        self.card.show(phrase, langs=LANGS, show_back=translations, show_examples=True,
                        example_en=translations,
                        info=phrase_info(self.app.progress, phrase, date.today()))
         self.position.configure(text=f"{self.index + 1} / {len(self.items)}")
@@ -789,12 +808,13 @@ class ListsTab(ttk.Frame):
         labeled_spin(row2, "Number of items", self.limit_var, 0, 3000, 10, self.refresh, width=6)
         ttk.Label(row2, text="(0 = all)", foreground=MUTED, font=fonts["small"]).pack(side="left",
                                                                                      padx=(0, 12))
-        self.translation_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row2, text="Translation", variable=self.translation_var,
-                        command=self.refresh).pack(side="left", padx=(0, 8))
-        self.examples_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(row2, text="Examples", variable=self.examples_var,
-                        command=self.refresh).pack(side="left", padx=(0, 8))
+        s = self.app.progress.settings
+        shown = clean_langs(s.get("lists_langs"))
+        self.lang_vars = {lang: tk.BooleanVar(value=lang in shown) for lang in LANGS}
+        lang_checkboxes(row2, self.lang_vars, self.on_columns_changed)
+        self.examples_var = tk.BooleanVar(value=bool(s.get("lists_examples", False)))
+        ttk.Checkbutton(row2, text="Examples", variable=self.examples_var, takefocus=False,
+                        command=self.on_columns_changed).pack(side="left", padx=(0, 8))
         ttk.Button(row2, text="Export…", command=self.export).pack(side="right", padx=3)
         ttk.Button(row2, text="Practice these", command=self.practice).pack(side="right", padx=3)
         ttk.Button(row2, text="▶ Auto play these",
@@ -842,10 +862,22 @@ class ListsTab(ttk.Frame):
             self.after_cancel(self._search_job)
         self._search_job = self.after(300, self.refresh)
 
+    def langs(self) -> list[str]:
+        return [lang for lang in LANGS if self.lang_vars[lang].get()]
+
+    def on_columns_changed(self, clicked: str | None = None) -> None:
+        if clicked and checked_langs(self.lang_vars, clicked) is None:
+            self.summary.configure(text="At least one language is needed.")
+            return
+        s, new = self.app.progress.settings, {"lists_langs": self.langs(),
+                                              "lists_examples": bool(self.examples_var.get())}
+        if any(s.get(k) != v for k, v in new.items()):
+            s.update(new)
+            self.app.progress.save()
+        self.refresh()
+
     def visible_columns(self) -> list[str]:
-        cols = ["n", "id", "german"]
-        if self.translation_var.get():
-            cols += ["english", "chinese"]
+        cols = ["n", "id", *(LANG_FIELD[lang] for lang in self.langs())]
         if self.examples_var.get():
             cols.append("examples")
         return cols + ["status"]
@@ -867,7 +899,7 @@ class ListsTab(ttk.Frame):
             star = "★ " if p.id in progress.starred else ""
             examples = "  |  ".join(de for de, _ in p.examples)
             self.tree.insert("", "end", iid=p.id, tags=tags, values=(
-                n, p.id, star + p.german, p.english, p.chinese, examples, card_status(progress, p, today)))
+                n, star + p.id, p.german, p.english, p.chinese, examples, card_status(progress, p, today)))
         self.summary.configure(text=f"Showing {len(self.shown)} of {len(matching)} matching phrases")
 
     def open_selected(self, event=None) -> None:
@@ -887,29 +919,25 @@ class ListsTab(ttk.Frame):
             filetypes=[("CSV (Excel)", "*.csv"), ("Text for printing", "*.txt")])
         if not path:
             return
-        with_translation, with_examples = self.translation_var.get(), self.examples_var.get()
+        langs, with_examples = self.langs(), self.examples_var.get()
+        with_english = "en" in langs  # examples are German, with their English translation
         if path.lower().endswith(".txt"):
             with open(path, "w", encoding="utf-8") as f:
                 for n, p in enumerate(self.shown, 1):
-                    line = f"{n}. {p.german}"
-                    if with_translation:
-                        line += f"  —  {p.english}  /  {p.chinese}"
-                    f.write(line + "\n")
+                    f.write(f"{n}. " + "  —  ".join(phrase_text(p, lang) for lang in langs) + "\n")
                     if with_examples:
                         for de, en in p.examples:
-                            f.write(f"     • {de}" + (f"  ({en})" if with_translation else "") + "\n")
+                            f.write(f"     • {de}" + (f"  ({en})" if with_english else "") + "\n")
         else:
             with open(path, "w", encoding="utf-8-sig", newline="") as f:
                 writer = csv.writer(f)
-                header = ["id", "level", "topic", "german"]
-                header += ["english", "chinese"] if with_translation else []
+                header = ["id", "level", "topic", *(LANG_FIELD[lang] for lang in langs)]
                 header += ["examples"] if with_examples else []
                 writer.writerow(header + ["status"])
                 for p in self.shown:
-                    row = [p.id, p.level, p.topic, p.german]
-                    row += [p.english, p.chinese] if with_translation else []
+                    row = [p.id, p.level, p.topic, *(phrase_text(p, lang) for lang in langs)]
                     if with_examples:
-                        row.append(" | ".join(f"{de} ({en})" if with_translation else de
+                        row.append(" | ".join(f"{de} ({en})" if with_english else de
                                               for de, en in p.examples))
                     writer.writerow(row + [card_status(self.app.progress, p, date.today())])
         messagebox.showinfo("Export", f"Saved {len(self.shown)} phrases to\n{path}")
@@ -1317,6 +1345,15 @@ class AutoPlayTab(ttk.Frame):
         self.pause_vars: dict[str, tk.DoubleVar] = {
             key: tk.DoubleVar(value=saved.get(key, DEFAULT_PAUSE)) for key in PAUSES}
         self.loop_var = tk.BooleanVar(value=self.settings.get("autoplay_loop", False))
+        # What to play; the Settings tab shows the same controls.
+        self.content_var = tk.StringVar(
+            value=AUTOPLAY_CONTENT[clean_content(self.settings.get("autoplay_content"))])
+        playing = clean_langs(self.settings.get("autoplay_langs"))
+        self.lang_vars = {lang: tk.BooleanVar(value=lang in playing) for lang in LANGS}
+        row = ttk.Frame(self, padding=(10, 4, 10, 2))
+        row.pack(fill="x")
+        self.content_controls(row)
+
         row = ttk.Frame(self, padding=(10, 4, 10, 2))
         row.pack(fill="x")
         voice_controls(row, self.app)
@@ -1339,7 +1376,27 @@ class AutoPlayTab(ttk.Frame):
                       text="No speech voice was found, so Auto play only shows the cards "
                            "with timed pauses.").pack(fill="x", side="bottom")
 
+    def content_controls(self, parent) -> None:
+        labeled_combo(parent, "Play", self.content_var, AUTOPLAY_CONTENT.values(), 18,
+                      self.on_content_changed)
+        ttk.Label(parent, text="Phrase in").pack(side="left", padx=(0, 6))
+        lang_checkboxes(parent, self.lang_vars, self.on_content_changed)
+
     # ----- what to play
+
+    def content(self) -> str:
+        return next(k for k, v in AUTOPLAY_CONTENT.items() if v == self.content_var.get())
+
+    def langs(self) -> list[str]:
+        return clean_langs([lang for lang in LANGS if self.lang_vars[lang].get()])
+
+    def on_content_changed(self, clicked: str | None = None) -> None:
+        if clicked and checked_langs(self.lang_vars, clicked) is None:
+            self.step_label.configure(text="At least one language is needed")
+            return
+        self.save_settings()
+        if not self.playing and self.items:  # while playing, the next phrase uses the new choice
+            self._show_still()
 
     def load_today(self) -> None:
         s = self.app.progress.settings
@@ -1359,8 +1416,10 @@ class AutoPlayTab(ttk.Frame):
             self.card.message("No phrases to play.\nStudy some phrases first, or use "
                               "“Auto play these” in the Lists tab.")
             return
-        phrase = self.items[self.index]
-        self.card.show(phrase, info=phrase_info(self.app.progress, phrase, date.today()))
+        phrase, langs = self.items[self.index], self.langs()
+        self.card.show(phrase, langs=langs, show_examples=self.content() != "phrase",
+                       example_en="en" in langs,
+                       info=phrase_info(self.app.progress, phrase, date.today()))
 
     def _update_labels(self, step: str) -> None:
         total = len(self.items)
@@ -1423,7 +1482,8 @@ class AutoPlayTab(ttk.Frame):
 
     def save_settings(self) -> None:
         new = {"autoplay_pauses": {key: self.pause(key) for key in PAUSES},
-               "autoplay_loop": bool(self.loop_var.get())}
+               "autoplay_loop": bool(self.loop_var.get()),
+               "autoplay_content": self.content(), "autoplay_langs": self.langs()}
         if any(self.settings.get(k) != v for k, v in new.items()):
             self.settings.update(new)
             self.app.progress.save()
@@ -1433,31 +1493,25 @@ class AutoPlayTab(ttk.Frame):
             var.set(DEFAULT_PAUSE)
         self.save_settings()
 
-    def _wait(self, key: str):
-        # Read the value at each step, so changes apply while playing.
-        return ("wait", self.pause(key))
-
     def _item_steps(self):
-        """One phrase after another: each step is ("speak", text) or ("wait", seconds)."""
+        """One phrase after another: yields ("speak", text, lang) or ("wait", seconds)."""
         while self.index < len(self.items):
-            phrase = self.items[self.index]
+            phrase, content, langs = self.items[self.index], self.content(), self.langs()
             info = phrase_info(self.app.progress, phrase, date.today())
-            self.card.show(phrase, show_back=False, show_examples=False, info=info)
-            self._update_labels("🔊 Listen")
-            yield ("speak", phrase.german)
-            self._update_labels("💭 What does it mean?")
-            yield self._wait("recall")
-            self.card.show(phrase, info=info)
-            self._update_labels("Answer")
-            yield self._wait("answer")
-            for i, (german, _) in enumerate(phrase.examples):
-                self.card.highlight_example(i)
-                self._update_labels(f"🔊 Example {i + 1} of {len(phrase.examples)}")
-                yield ("speak", german)
-                yield self._wait("example")
-            self.card.highlight_example(None)
-            self._update_labels("Next phrase…")
-            yield self._wait("next")
+            for kind, *args in autoplay_steps(phrase, content, langs):
+                if kind == "show":
+                    shown, examples = args
+                    self.card.show(phrase, langs=langs[:shown], show_examples=examples,
+                                   example_en="en" in langs, info=info)
+                elif kind == "status":
+                    self._update_labels(args[0])
+                elif kind == "highlight":
+                    self.card.highlight_example(args[0])
+                elif kind == "wait":
+                    # Read the value at each step, so changes apply while playing.
+                    yield ("wait", self.pause(args[0]))
+                else:
+                    yield (kind, *args)
             if self.index + 1 >= len(self.items) and self.loop_var.get():
                 self.index = 0
             else:
@@ -1470,15 +1524,15 @@ class AutoPlayTab(ttk.Frame):
         if run != self._run:
             return
         try:
-            kind, value = next(self._steps)
+            kind, value, *lang = next(self._steps)
         except StopIteration:
             return
         if run != self._run:  # the generator itself stopped playback
             return
         if kind == "wait":
             self._job = self.after(int(value * 1000), self._next_step, run)
-        elif self.app.speaker.available:
-            self.app.speaker.speak(value)
+        elif self.app.speaker.has_voice(lang[0]):
+            self.app.speaker.speak(value, lang[0])
             self._wait_for_speech(run, time.monotonic())
         else:  # no voice: give roughly the time it takes to read the sentence
             self._job = self.after(int((1.0 + 0.06 * len(value)) * 1000), self._next_step, run)
@@ -1599,6 +1653,10 @@ class SettingsTab(ttk.Frame):
             self.line(box, "No speech voice was found.")
 
         box = self.section("Auto play")
+        autoplay.content_controls(self.line(box))
+        self.line(box, "Phrase in: the languages spoken, in this order (at least one). "
+                       "Examples are German, followed by their English translation when English "
+                       "is ticked. Also in the Auto play tab.")
         row = self.line(box)
         ttk.Label(row, text="Pauses in seconds:").pack(side="left", padx=(0, 8))
         for key, label in PAUSES.items():

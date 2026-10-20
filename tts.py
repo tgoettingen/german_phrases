@@ -1,11 +1,14 @@
-"""Speak German text with the operating system's built-in voices (no extra packages).
+"""Speak German, English and Chinese text with the operating system's built-in voices.
+
+No extra packages are needed.
 
 Windows: the newer OneCore voices (Katja, Stefan, Hedda) through Windows.Media.SpeechSynthesis,
          falling back to System.Speech (Hedda Desktop) on older systems. Both run in PowerShell.
 macOS: `say` with a German voice (Anna, ...) if installed.
 Linux: espeak-ng or espeak, if installed.
 
-The voice and the speed can be chosen; `Speaker.voices` lists the German voices found.
+The German voice and the speed can be chosen; `Speaker.voices` lists the German voices found.
+English and Chinese (used by Auto play) get the best voice of their language, if one is installed.
 """
 import os
 import re
@@ -20,17 +23,20 @@ WORDS_PER_MINUTE = 175  # normal speed of `say` and espeak
 
 _POWERSHELL = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
-# Prints the engine to use ("winrt" or "sapi"), then one "name|gender|language" line per German voice.
+LANGS = ("de", "en", "zh")
+
+# Prints the engine to use ("winrt" or "sapi"), then one "name|gender|language" line per
+# German, English or Chinese voice.
 _WINDOWS_VOICES_SCRIPT = """
 try {
   $null = [Windows.Media.SpeechSynthesis.SpeechSynthesizer,Windows.Media.SpeechSynthesis,ContentType=WindowsRuntime]
-  $v = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices | Where-Object { $_.Language -like 'de*' }
+  $v = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices | Where-Object { $_.Language -match '^(de|en|zh)' }
   if ($v) { 'winrt'; $v | ForEach-Object { $_.DisplayName + '|' + $_.Gender + '|' + $_.Language }; exit }
 } catch {}
 Add-Type -AssemblyName System.Speech
 'sapi'
 (New-Object System.Speech.Synthesis.SpeechSynthesizer).GetInstalledVoices() |
-  Where-Object { $_.VoiceInfo.Culture.Name -like 'de*' } |
+  Where-Object { $_.VoiceInfo.Culture.Name -match '^(de|en|zh)' } |
   ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Gender + '|' + $_.VoiceInfo.Culture.Name }
 """
 
@@ -41,7 +47,7 @@ $null = [Windows.Media.SpeechSynthesis.SpeechSynthesizer,Windows.Media.SpeechSyn
 $s = New-Object Windows.Media.SpeechSynthesis.SpeechSynthesizer
 $all = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices
 $v = $all | Where-Object { $_.DisplayName -eq $env:PHRASE_TTS_VOICE } | Select-Object -First 1
-if (-not $v) { $v = $all | Where-Object { $_.Language -like 'de*' } | Select-Object -First 1 }
+if (-not $v) { $v = $all | Where-Object { $_.Language -like "$env:PHRASE_TTS_LANG*" } | Select-Object -First 1 }
 if ($v) { $s.Voice = $v }
 $s.Options.SpeakingRate = [double]$env:PHRASE_TTS_RATE
 $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
@@ -58,7 +64,7 @@ Add-Type -AssemblyName System.Speech
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
 $all = $s.GetInstalledVoices()
 $v = $all | Where-Object { $_.VoiceInfo.Name -eq $env:PHRASE_TTS_VOICE } | Select-Object -First 1
-if (-not $v) { $v = $all | Where-Object { $_.VoiceInfo.Culture.Name -like 'de*' } | Select-Object -First 1 }
+if (-not $v) { $v = $all | Where-Object { $_.VoiceInfo.Culture.Name -like "$env:PHRASE_TTS_LANG*" } | Select-Object -First 1 }
 if ($v) { $s.SelectVoice($v.VoiceInfo.Name) }
 $s.Rate = [int]$env:PHRASE_TTS_RATE
 $s.Speak($env:PHRASE_TTS_TEXT)
@@ -79,6 +85,7 @@ def speakable(text: str) -> str:
 class Voice:
     name: str         # what the speech engine calls it
     gender: str = ""  # "female", "male" or "" if unknown
+    lang: str = "de"  # "de", "en" or "zh"
 
     @property
     def label(self) -> str:
@@ -92,16 +99,18 @@ def parse_voices(output: str) -> list[Voice]:
     voices = []
     for line in output.splitlines():
         parts = line.strip().split("|")
-        if len(parts) == 3 and parts[0]:
+        lang = parts[2][:2].lower() if len(parts) == 3 else ""
+        if parts[0] and lang in LANGS:
             gender = parts[1].lower()
-            voices.append(Voice(parts[0], gender if gender in ("female", "male") else ""))
+            voices.append(Voice(parts[0], gender if gender in ("female", "male") else "", lang))
     return voices
 
 
-def default_voice(voices: list[Voice]) -> Voice | None:
-    """Katja sounds most natural; then other female voices, then the rest. Hedda sounds worst."""
-    ranked = sorted(voices, key=lambda v: ("Katja" not in v.name, "Hedda" in v.name,
-                                          v.gender != "female"))
+def default_voice(voices: list[Voice], lang: str = "de") -> Voice | None:
+    """The best voice for `lang`, female voices first. German: Katja sounds most natural,
+    Hedda worst."""
+    ranked = sorted((v for v in voices if v.lang == lang),
+                    key=lambda v: ("Katja" not in v.name, "Hedda" in v.name, v.gender != "female"))
     return ranked[0] if ranked else None
 
 
@@ -113,7 +122,8 @@ def sapi_rate(rate: float) -> int:
 class Speaker:
     def __init__(self, voice: str = "", rate: float = DEFAULT_RATE):
         self._proc: subprocess.Popen | None = None
-        self.engine, self.voices = self._find_engine()
+        self.engine, self.all_voices = self._find_engine()
+        self.voices = [v for v in self.all_voices if v.lang == "de"]  # the choice in the settings
         self.voice: Voice | None = None
         self.rate = DEFAULT_RATE
         self.set_voice(voice)
@@ -127,6 +137,14 @@ class Speaker:
     def busy(self) -> bool:
         """True while the last text is still being spoken."""
         return self._proc is not None and self._proc.poll() is None
+
+    def voice_for(self, lang: str) -> Voice | None:
+        """The chosen German voice, or the best voice for English or Chinese."""
+        return self.voice if lang == "de" else default_voice(self.all_voices, lang)
+
+    def has_voice(self, lang: str) -> bool:
+        """True if text in `lang` can be spoken (German is tried even without a German voice)."""
+        return self.available and (lang == "de" or self.voice_for(lang) is not None)
 
     def set_voice(self, name: str) -> None:
         """Use the voice called `name`, or the best German voice if there is none by that name."""
@@ -147,8 +165,8 @@ class Speaker:
             except (OSError, subprocess.SubprocessError):
                 listing = ""
             # Lines look like "Anna (Enhanced)    de_DE    # Hallo! Ich heiße Anna."
-            names = re.findall(r"^(.+?)\s+de_DE\s", listing, re.MULTILINE)
-            return "say", [Voice(name) for name in names]
+            found = re.findall(r"^(.+?)\s+(de_DE|en_US|en_GB|zh_CN|zh_TW)\s", listing, re.MULTILINE)
+            return "say", [Voice(name, "", lang[:2]) for name, lang in found]
         if sys.platform == "win32" and shutil.which("powershell"):
             try:
                 lines = subprocess.run([*_POWERSHELL, _WINDOWS_VOICES_SCRIPT], capture_output=True,
@@ -160,26 +178,30 @@ class Speaker:
             return engine, parse_voices(lines)
         for exe in ("espeak-ng", "espeak"):
             if shutil.which(exe):
-                return exe, [Voice("de"), Voice("de+f3", "female"), Voice("de+m3", "male")]
+                return exe, [Voice("de"), Voice("de+f3", "female"), Voice("de+m3", "male"),
+                             Voice("en", "", "en"), Voice("cmn", "", "zh")]
         return None, []
 
-    def _command(self, text: str) -> tuple[list[str], dict]:
+    def _command(self, text: str, lang: str) -> tuple[list[str], dict]:
         env = dict(os.environ)
-        name = self.voice.name if self.voice else ""
+        voice = self.voice_for(lang)
+        name = voice.name if voice else ""
         if self.engine in ("winrt", "sapi"):
             env["PHRASE_TTS_TEXT"] = text
             env["PHRASE_TTS_VOICE"] = name
+            env["PHRASE_TTS_LANG"] = lang
             env["PHRASE_TTS_RATE"] = str(self.rate if self.engine == "winrt" else sapi_rate(self.rate))
             return [*_POWERSHELL, _WINRT_SCRIPT if self.engine == "winrt" else _SAPI_SCRIPT], env
         voice = ["-v", name] if name else []
         speed = ["-r" if self.engine == "say" else "-s", str(round(WORDS_PER_MINUTE * self.rate))]
         return [self.engine, *voice, *speed, text], env
 
-    def speak(self, text: str) -> None:
-        if not self.engine or not text.strip():
+    def speak(self, text: str, lang: str = "de") -> None:
+        """Speak `text` in German, or in English or Chinese ("en", "zh") if such a voice exists."""
+        if not self.has_voice(lang) or not text.strip():
             return
         self.stop()
-        args, env = self._command(speakable(text))
+        args, env = self._command(speakable(text) if lang == "de" else text, lang)
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         try:
             self._proc = subprocess.Popen(args, env=env, stdout=subprocess.DEVNULL,

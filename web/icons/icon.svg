@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed background, content inside the safe circle: also works as a maskable icon. -->
+  <defs><clipPath id="card"><rect x="106" y="146" width="300" height="220" rx="26"/></clipPath></defs>
+  <rect width="512" height="512" fill="#2a78d6"/>
+  <g clip-path="url(#card)">
+    <rect x="106" y="146" width="300" height="220" fill="#fcfcfb"/>
+    <rect x="106" y="318" width="300" height="16" fill="#0b0b0b"/>
+    <rect x="106" y="334" width="300" height="16" fill="#d03b3b"/>
+    <rect x="106" y="350" width="300" height="16" fill="#f2c200"/>
+  </g>
+  <text x="256" y="282" text-anchor="middle" font-family="Segoe UI, Roboto, Arial, sans-serif"
+        font-size="128" font-weight="800" fill="#0b0b0b">DE</text>
+</svg>

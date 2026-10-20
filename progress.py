@@ -5,12 +5,13 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
+from display_options import clean_direction
 from srs import CardState
 
 DEFAULT_PATH = Path(__file__).resolve().parent / "data" / "progress.json"
 DEFAULT_SETTINGS = {
     "level": "B1",            # "B1", "B2", "C1" or "ALL"
-    "direction": "de_to_en",  # "de_to_en" or "en_to_de"
+    "direction": "de_to_en",  # a key of display_options.DIRECTIONS
     "new_per_day": 20,
     # Used by trainer.py only:
     "topic": "ALL",
@@ -19,6 +20,10 @@ DEFAULT_SETTINGS = {
     "voice": "",              # speech voice name, "" = best German voice found
     "speech_rate": 0.9,       # speech speed, 1.0 = normal
     "text_size": 100,         # percent of the normal text size
+    "autoplay_content": "phrase_examples",  # a key of display_options.AUTOPLAY_CONTENT
+    "autoplay_langs": ["de", "en", "zh"],    # phrase languages Auto play speaks, in order
+    "lists_langs": ["de", "en", "zh"],       # language columns in the Lists tab
+    "lists_examples": False,                 # examples column in the Lists tab
 }
 
 
@@ -39,6 +44,7 @@ class Progress:
         data = json.loads(self.path.read_text(encoding="utf-8"))
         self.cards = {pid: CardState.from_dict(s) for pid, s in data.get("cards", {}).items()}
         self.settings.update(data.get("settings", {}))
+        self.settings["direction"] = clean_direction(self.settings["direction"])
         self.daily.update(data.get("daily", {}))
         self.log = data.get("log", [])
         self.starred = set(data.get("starred", []))

@@ -95,6 +95,9 @@ export function formatInterval(days) {
 export const DEFAULT_SETTINGS = {
   level: "B1", direction: "de_to_en", new_per_day: 20,
   topic: "ALL", answer_mode: "reveal", daily_goal: 30,
+  voice: "", speech_rate: 0.9, text_size: 100, // used by trainer.py; kept so the file round-trips
+  autoplay_content: "phrase_examples", autoplay_langs: ["de", "en", "zh"],
+  lists_langs: ["de", "en", "zh"], lists_examples: false,
 };
 
 export class Progress {
@@ -113,6 +116,7 @@ export class Progress {
     this.cards = {};
     for (const [pid, s] of Object.entries(data.cards || {})) this.cards[pid] = newCard(s);
     this.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+    this.settings.direction = cleanDirection(this.settings.direction);
     this.daily = { date: "", new: 0, reviews: 0, ...(data.daily || {}) };
     this.log = data.log || [];
     this.starred = new Set(data.starred || []);
@@ -531,10 +535,87 @@ export function levelChoices(phrases) {
   return [...LEVELS, ...others, "ALL"];
 }
 export const ALL_TOPICS = "All topics";
+
+// ---------------------------------------------------------------- display_options.py
+
+export const LANGS = ["de", "en", "zh"];
+export const LANG_FIELD = { de: "german", en: "english", zh: "chinese" };
+export const LANG_LABELS = { de: "German", en: "English", zh: "中文" };
+export const LANG_CODES = { de: "de-DE", en: "en-US", zh: "zh-CN" }; // for speech and lang=""
+
+// Study always has German on one side; no other combination is allowed.
+// "de_to_en" and "en_to_de" keep their old meaning (English and 中文 together).
 export const DIRECTIONS = {
   de_to_en: "German → English / 中文",
   en_to_de: "English / 中文 → German",
+  de_to_en_only: "German → English",
+  en_only_to_de: "English → German",
+  de_to_zh: "German → 中文",
+  zh_to_de: "中文 → German",
 };
+export const DIRECTION_LANGS = { // direction: [front languages, back languages]
+  de_to_en: [["de"], ["en", "zh"]], en_to_de: [["en", "zh"], ["de"]],
+  de_to_en_only: [["de"], ["en"]], en_only_to_de: [["en"], ["de"]],
+  de_to_zh: [["de"], ["zh"]], zh_to_de: [["zh"], ["de"]],
+};
+export const DEFAULT_DIRECTION = "de_to_en";
+
+export const AUTOPLAY_CONTENT = {
+  phrase: "Phrase only",
+  phrase_examples: "Phrase + examples",
+  examples: "Examples only",
+};
+export const DEFAULT_AUTOPLAY_CONTENT = "phrase_examples";
+
+export const cleanDirection = (value) => (value in DIRECTIONS ? value : DEFAULT_DIRECTION);
+export const cleanContent = (value) => (value in AUTOPLAY_CONTENT ? value : DEFAULT_AUTOPLAY_CONTENT);
+
+// The known languages in `value`, in German, English, 中文 order; never empty.
+export function cleanLangs(value, fallback = LANGS) {
+  const chosen = LANGS.filter((lang) => Array.isArray(value) && value.includes(lang));
+  return chosen.length ? chosen : [...fallback];
+}
+
+export const phraseText = (phrase, lang) => phrase[LANG_FIELD[lang]];
+
+// [front languages, back languages] of a study card; the typed answer is the first back one.
+export const cardSides = (direction) => DIRECTION_LANGS[cleanDirection(direction)];
+
+// What Auto play does for one phrase, in order (see autoplay_steps in display_options.py).
+export function autoplaySteps(phrase, content, langs) {
+  content = cleanContent(content);
+  langs = cleanLangs(langs);
+  const withExamples = content !== "phrase" && phrase.examples.length > 0;
+  const steps = [];
+  if (content !== "examples") {
+    const [first, ...rest] = langs;
+    steps.push(["show", 1, false], ["status", "🔊 Listen"], ["speak", phraseText(phrase, first), first]);
+    if (rest.length) {
+      steps.push(["status", "💭 What does it mean?"], ["wait", "recall"], ["show", langs.length, withExamples]);
+      for (const lang of rest) {
+        steps.push(["status", `🔊 ${LANG_LABELS[lang]}`], ["speak", phraseText(phrase, lang), lang]);
+      }
+    } else {
+      steps.push(["show", 1, withExamples]);
+    }
+    steps.push(["status", "Answer"], ["wait", "answer"]);
+  } else {
+    steps.push(["show", langs.length, withExamples]);
+  }
+  if (withExamples) {
+    phrase.examples.forEach(([german, english], i) => {
+      steps.push(["highlight", i], ["status", `🔊 Example ${i + 1} of ${phrase.examples.length}`],
+        ["speak", german, "de"]);
+      if (langs.includes("en") && english) steps.push(["speak", english, "en"]);
+      steps.push(["wait", "example"]);
+    });
+    steps.push(["highlight", null]);
+  }
+  steps.push(["status", "Next phrase…"], ["wait", "next"]);
+  return steps;
+}
+
+// ---------------------------------------------------------------- trainer.py helpers (continued)
 
 export function phraseFromRow([id, level, topic, german, english, chinese, examples]) {
   return { id, level, topic, german, english, chinese, examples };

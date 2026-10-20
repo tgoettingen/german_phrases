@@ -116,3 +116,9 @@ the same `progress.json` format (export/import to move progress). See `mobile/RE
 | `tools/build_phrases.py` | rebuilds the phrase CSVs from `data/chunks/` (`--kind words`: the word collections from `data/word_chunks/`); existing IDs are kept, new entries are appended up to `--target`/`--targets B2=1500,C1=1500` |
 | `tests/` | unit tests: `python -m unittest discover -s tests` |
 | `mobile/` | Android phone app (installable web app), see `mobile/README.md` |
+| `web/` | browser app for PC and phone (the mobile app with a desktop sidebar), see `web/README.md` |
+
+## new requirements
+
+- study and other place, it should allow only select english -> german, or german to english, or chinese to german, or german to chinese, and not allow any other combination.
+- auto play should allow which part to autoplay, e.g. only the phrase (in different language?), or phrase + examples, or only examples, etc. and not allow any other combination. also in the lists tab, it should also possible to display different combinations, German on/off, english on/off, chinese on/off. 

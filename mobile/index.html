@@ -88,6 +88,13 @@
         <button id="auto-next" aria-label="Next">▶▶</button>
       </div>
       <div class="filters">
+        <select id="auto-content" aria-label="Play"></select>
+        <span class="muted small">Phrase in</span>
+        <label class="check"><input id="auto-lang-de" type="checkbox"> German</label>
+        <label class="check"><input id="auto-lang-en" type="checkbox"> English</label>
+        <label class="check"><input id="auto-lang-zh" type="checkbox"> 中文</label>
+      </div>
+      <div class="filters">
         <label class="check"><input id="auto-loop" type="checkbox"> Repeat from the start</label>
         <button id="auto-today">Load today's phrases</button>
       </div>
@@ -104,7 +111,7 @@
       </div>
       <progress id="auto-bar" max="1" value="0"></progress>
       <div id="auto-card" class="card"></div>
-      <p id="auto-novoice" class="hint" hidden>No German voice was found, so Auto play only shows the
+      <p id="auto-novoice" class="hint" hidden>No speech voice was found, so Auto play only shows the
         cards with timed pauses. Install one in Android Settings → Text-to-speech.</p>
     </section>
 
@@ -125,7 +132,11 @@
         <label class="number">Items <input id="lists-limit" type="number" min="0" max="3000" step="10"
                                           value="50" inputmode="numeric"></label>
         <span class="muted small">(0 = all)</span>
-        <label class="check"><input id="lists-translation" type="checkbox" checked> Translation</label>
+      </div>
+      <div class="filters">
+        <label class="check"><input id="lists-lang-de" type="checkbox"> German</label>
+        <label class="check"><input id="lists-lang-en" type="checkbox"> English</label>
+        <label class="check"><input id="lists-lang-zh" type="checkbox"> 中文</label>
         <label class="check"><input id="lists-examples" type="checkbox"> Examples</label>
       </div>
       <div class="filters">

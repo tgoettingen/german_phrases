@@ -83,7 +83,6 @@ main { padding: 8px 12px calc(var(--tab-height) + 16px + env(safe-area-inset-bot
 .card .message { font-size: 1.25rem; font-weight: 600; margin: 48px 0; white-space: pre-line; }
 .card hr { border: none; border-top: 1px solid var(--grid); margin: 8px 0; }
 .card .back { font-size: 1.2rem; margin: 10px 0 2px; overflow-wrap: anywhere; }
-.card .chinese { font-size: 1.2rem; margin-bottom: 8px; }
 .card .examples { list-style: none; margin: 8px 0 0; padding: 0; text-align: left; }
 .card .examples li { display: flex; gap: 8px; padding: 6px 4px; border-radius: 8px; }
 .card .examples li.reading { background: var(--studied); }

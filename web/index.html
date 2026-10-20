@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2a78d6">
+  <meta name="description" content="Learn 4,000 German phrases and 3,000 words (B1-C1) with spaced repetition.">
+  <title>German Phrases</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="title">German Phrases</h1>
+    <button id="settings-open" class="icon" aria-label="Settings">⚙</button>
+  </header>
+
+  <main>
+    <!-- ------------------------------------------------------------ Study -->
+    <section id="study" class="view">
+      <button id="study-summary" class="chips" aria-label="Change study settings"></button>
+      <div class="status">
+        <progress id="goal-bar" max="1" value="0"></progress>
+        <span id="study-status"></span>
+      </div>
+      <div id="practice-bar" class="practice-bar" hidden>
+        <span id="practice-label"></span>
+        <button id="practice-end">End practice</button>
+      </div>
+      <div id="study-card" class="card"></div>
+      <div id="answer-row" class="answer-row" hidden>
+        <input id="answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+               enterkeyhint="done" placeholder="Type the answer">
+        <button id="answer-check" class="primary">Check</button>
+        <div id="answer-result" class="answer-result"></div>
+      </div>
+      <div class="dock">
+        <div class="toolbar">
+          <button id="study-back" aria-label="Back">◀</button>
+          <button id="study-forward">Skip ▶</button>
+          <button id="study-speak" aria-label="Speak">🔊</button>
+          <button id="study-star" aria-label="Star">☆</button>
+          <button id="study-undo">Undo</button>
+        </div>
+        <div id="study-buttons" class="buttons"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ Browse -->
+    <section id="browse" class="view" hidden>
+      <div class="filters">
+        <select id="browse-level" aria-label="Level"></select>
+        <select id="browse-topic" aria-label="Topic"></select>
+      </div>
+      <div class="filters">
+        <label class="check"><input id="browse-translate" type="checkbox" checked> Translations</label>
+        <form id="browse-goto" class="goto">
+          <input id="browse-goto-input" type="search" inputmode="text" placeholder="Go to # or ID"
+                 enterkeyhint="go" aria-label="Go to number or ID">
+        </form>
+      </div>
+      <div class="position">
+        <span id="browse-position"></span>
+        <input id="browse-scale" type="range" min="1" max="2" value="1" aria-label="Position">
+      </div>
+      <div id="browse-card" class="card swipe"></div>
+      <div class="dock">
+        <div class="toolbar">
+          <button id="browse-prev" aria-label="Previous">◀</button>
+          <button id="browse-peek">Peek</button>
+          <button id="browse-random">Random</button>
+          <button id="browse-speak" aria-label="Speak">🔊</button>
+          <button id="browse-star" aria-label="Star">☆</button>
+          <button id="browse-next" aria-label="Next">▶</button>
+        </div>
+        <button id="browse-practice" class="wide">Practice this selection</button>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ Auto play -->
+    <section id="autoplay" class="view" hidden>
+      <div class="toolbar">
+        <button id="auto-prev" aria-label="Previous">◀</button>
+        <button id="auto-play" class="primary play">▶ Play</button>
+        <button id="auto-next" aria-label="Next">▶▶</button>
+      </div>
+      <div class="filters">
+        <label class="check"><input id="auto-loop" type="checkbox"> Repeat from the start</label>
+        <button id="auto-today">Load today's phrases</button>
+      </div>
+      <details class="pauses">
+        <summary>Pauses <span id="auto-pause-summary" class="muted"></span></summary>
+        <div id="auto-pauses" class="pause-grid"></div>
+        <p class="hint">Recall: silence after the phrase is spoken · Answer: after the translation
+          appears · Example: after each example · Next: before the next phrase. Saved automatically.</p>
+        <button id="auto-reset">Reset to 1 s</button>
+      </details>
+      <div class="auto-labels">
+        <span id="auto-source"></span>
+        <strong id="auto-step"></strong>
+      </div>
+      <progress id="auto-bar" max="1" value="0"></progress>
+      <div id="auto-card" class="card"></div>
+      <p id="auto-novoice" class="hint" hidden>No German voice was found, so Auto play only shows the
+        cards with timed pauses. Windows: Settings → Time &amp; language → Speech → Add voices.</p>
+    </section>
+
+    <!-- ------------------------------------------------------------ Lists -->
+    <section id="lists" class="view" hidden>
+      <div class="filters">
+        <select id="lists-kind" aria-label="Show"></select>
+      </div>
+      <div class="filters">
+        <select id="lists-level" aria-label="Level"></select>
+        <select id="lists-topic" aria-label="Topic"></select>
+      </div>
+      <div class="filters">
+        <select id="lists-sort" aria-label="Sort"></select>
+        <input id="lists-search" type="search" placeholder="Search" aria-label="Search">
+      </div>
+      <div class="filters">
+        <label class="number">Items <input id="lists-limit" type="number" min="0" max="3000" step="10"
+                                          value="50" inputmode="numeric"></label>
+        <span class="muted small">(0 = all)</span>
+        <label class="check"><input id="lists-translation" type="checkbox" checked> Translation</label>
+        <label class="check"><input id="lists-examples" type="checkbox"> Examples</label>
+      </div>
+      <div class="filters">
+        <button id="lists-autoplay">▶ Auto play</button>
+        <button id="lists-practice">Practice these</button>
+        <button id="lists-export">Export…</button>
+      </div>
+      <p id="lists-summary" class="small muted"></p>
+      <ol id="lists-rows" class="rows"></ol>
+      <p class="hint">Orange = forgotten before, red = difficult (forgotten 3+ times).
+        Click a phrase to open it in Browse.</p>
+    </section>
+
+    <!-- ------------------------------------------------------------ Progress -->
+    <section id="progress" class="view" hidden>
+      <div id="tiles" class="tiles"></div>
+      <button id="level-stats-open" class="wide">Level statistics…</button>
+      <div class="calendar">
+        <div class="month">
+          <button id="month-prev" aria-label="Previous month">◀</button>
+          <strong id="month-label"></strong>
+          <button id="month-next" aria-label="Next month">▶</button>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+        <div id="legend" class="legend"></div>
+      </div>
+      <div class="day">
+        <h2 id="day-title"></h2>
+        <div id="day-kind" class="small"></div>
+        <div id="day-text" class="small muted"></div>
+        <div class="filters">
+          <button id="day-forgotten">Practice forgotten</button>
+          <button id="day-all">Practice all</button>
+          <button id="day-autoplay">▶ Auto play</button>
+        </div>
+        <ul id="day-rows" class="rows"></ul>
+      </div>
+      <h2 id="chart-title"></h2>
+      <div id="chart" class="chart"></div>
+      <div id="chart-info" class="small muted"></div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-tab="study" class="active"><span>📖</span>Study</button>
+    <button data-tab="browse"><span>🔎</span>Browse</button>
+    <button data-tab="autoplay"><span>🎧</span>Auto play</button>
+    <button data-tab="lists"><span>☰</span>Lists</button>
+    <button data-tab="progress"><span>📅</span>Progress</button>
+  </nav>
+
+  <!-- ------------------------------------------------------------ dialogs -->
+  <dialog id="settings">
+    <form method="dialog" novalidate>
+      <h2>Study settings</h2>
+      <label>Level <select id="set-level"></select></label>
+      <label>Topic <select id="set-topic"></select></label>
+      <label>Direction <select id="set-direction"></select></label>
+      <label>Answer <select id="set-mode">
+        <option value="reveal">Reveal answer</option>
+        <option value="type">Type the answer</option>
+      </select></label>
+      <label>New phrases per day <input id="set-new" type="number" min="0" max="200" step="5"
+                                        inputmode="numeric"></label>
+      <label>Daily goal (ratings) <input id="set-goal" type="number" min="1" max="500" step="5"
+                                         inputmode="numeric"></label>
+      <div id="set-speech">
+        <label id="set-voice-row">German voice <select id="set-voice"></select></label>
+        <label>Speech speed <span id="set-rate-value"></span>
+          <input id="set-rate" type="range" min="0.5" max="1.5" step="0.1"></label>
+        <button type="button" id="set-voice-test">▶ Test voice</button>
+        <p class="hint">More voices: Windows Settings → Time &amp; language → Speech → Add voices (German).
+          Edge also offers natural online voices.</p>
+      </div>
+      <h2>Progress file</h2>
+      <p class="hint">The same <code>progress.json</code> as the PC trainer. Export it here and copy it
+        to <code>data/progress.json</code> on the PC, or import the PC's file. Importing replaces the
+        progress in this browser.</p>
+      <div class="filters">
+        <button type="button" id="data-export">Export</button>
+        <button type="button" id="data-share" hidden>Share…</button>
+        <button type="button" id="data-import">Import…</button>
+        <input id="data-file" type="file" accept=".json,application/json" hidden>
+      </div>
+      <p id="data-info" class="hint"></p>
+      <button class="primary wide" value="close">Done</button>
+    </form>
+  </dialog>
+
+  <dialog id="level-stats">
+    <form method="dialog" novalidate>
+      <h2>Level statistics</h2>
+      <table id="level-stats-table"></table>
+      <p class="hint">Learning: forgotten or just started · Young: interval &lt; 21 days ·
+        Mature: interval 21+ days</p>
+      <button class="primary wide" value="close">Close</button>
+    </form>
+  </dialog>
+
+  <dialog id="export-list">
+    <form method="dialog" novalidate>
+      <h2>Export list</h2>
+      <p class="hint">Uses the current list, with or without translation and examples.</p>
+      <button class="wide" value="csv">CSV (Excel)</button>
+      <button class="wide" value="txt">Text for printing</button>
+      <button class="wide" value="">Cancel</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
