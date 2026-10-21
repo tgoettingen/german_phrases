@@ -7,7 +7,7 @@ sidebar at 900 px and wider, and at the bottom on narrow windows and phones. Sam
 
 ## Online
 
-<https://htpe.github.io/german_phrases/>, published by `.github/workflows/pages.yml`
+<https://tgoettingen.github.io/german_phrases/>, published by `.github/workflows/pages.yml`
 on every push to `main` that changes `web/`. Open it on any device. To install it as an app:
 
 - **Android**: Chrome → ⋮ → Add to Home screen → Install
@@ -19,7 +19,7 @@ opened while online. Progress stays on each device; move it with Settings → Ex
 
 ### One-time setup on GitHub
 
-On <https://github.com/htpe/german_phrases>:
+On <https://github.com/tgoettingen/german_phrases>:
 
 1. **Turn on Actions** (needed because the repo is a fork): open the **Actions** tab. If it says
    "Workflows aren't being run on this forked repository", click
@@ -27,7 +27,7 @@ On <https://github.com/htpe/german_phrases>:
 2. **Turn on Pages**: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 3. **Deploy**: **Actions** → **Deploy web to GitHub Pages** (left list) → **Run workflow** (branch
    `main`) → **Run workflow**. After about a minute the run is green and shows the link.
-4. **Open** <https://htpe.github.io/german_phrases/> and install it as described above.
+4. **Open** <https://tgoettingen.github.io/german_phrases/> and install it as described above.
 5. **Move your progress** (optional): on the PC, export `progress.json` (Settings → Export) or take
    `data/progress.json`, then on the phone choose Settings → Import.
 
